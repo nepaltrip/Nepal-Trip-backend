@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios'); // ✨ FIXED: Standard Node.js CommonJS import
 const User = require('../models/User');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/token');
 const getCookieOptions = require('../config/cookieConfig');
@@ -9,7 +10,6 @@ authRouter.post('/signup', async (req, res) => {
     try {
         const { name, mobile, email, password } = req.body;
 
-        // Keep this basic check to prevent empty requests before hitting the database
         if (!name || !mobile || !email || !password) {
             return res.status(400).json({ success: false, message: 'All fields are required' });
         }
@@ -26,7 +26,7 @@ authRouter.post('/signup', async (req, res) => {
             name,
             mobile,
             email: email.toLowerCase(),
-            password // Mongoose will run validator.isStrongPassword() right here before saving
+            password
         });
 
         const accessToken = generateAccessToken(newUser);
@@ -34,7 +34,6 @@ authRouter.post('/signup', async (req, res) => {
 
         newUser.refreshTokens.push(refreshToken);
 
-        // This is where Mongoose runs the schema validation!
         await newUser.save();
 
         const NotificationService = require('../services/notificationService');
@@ -56,11 +55,7 @@ authRouter.post('/signup', async (req, res) => {
             }
         });
     } catch (error) {
-        // ==========================================
-        // CATCH MONGOOSE VALIDATION ERRORS (Email/Password format fails)
-        // ==========================================
         if (error.name === 'ValidationError') {
-            // Extract the specific error message from the Mongoose schema
             const messages = Object.values(error.errors).map(val => val.message);
             return res.status(400).json({ success: false, message: messages[0] });
         }
@@ -140,7 +135,14 @@ authRouter.post('/refresh-token', async (req, res) => {
 
         res.status(200).json({
             success: true,
-            accessToken: newAccessToken
+            accessToken: newAccessToken,
+            user: { // ✨ Restores user state on page refresh
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                profilePic: user.profilePic || null
+            }
         });
     } catch (error) {
         console.error('Refresh Token Controller Error:', error.message);
@@ -167,6 +169,90 @@ authRouter.post('/logout', async (req, res) => {
     } catch (error) {
         console.error('Logout Controller Error:', error.message);
         res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+authRouter.post('/google', async (req, res) => {
+    try {
+        const { access_token } = req.body;
+
+        if (!access_token) {
+            return res.status(400).json({ success: false, message: 'No access token provided' });
+        }
+
+        // 1. Fetch user profile securely from Google
+        const googleResponse = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${access_token}` }
+        });
+
+        const { email, name, picture, sub: uid } = googleResponse.data;
+
+        // 2. Check if user already exists
+        let user = await User.findOne({ email: email.toLowerCase() });
+
+        if (user) {
+            // Link Google profile to existing user if not already linked
+            if (!user.googleId) {
+                user.googleId = uid;
+                user.authProvider = 'google';
+                if (!user.profilePic) user.profilePic = picture;
+                await user.save();
+            }
+        } else {
+            // 3. Register New Google User
+            user = new User({
+                name: name,
+                email: email.toLowerCase(),
+                authProvider: 'google',
+                googleId: uid,
+                profilePic: picture
+            });
+            await user.save();
+        }
+
+        // 4. Generate custom standard JWTs
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        user.refreshTokens.push(refreshToken);
+        await user.save();
+
+        res.cookie('refreshToken', refreshToken, getCookieOptions());
+
+        res.status(200).json({
+            success: true,
+            message: 'Logged in with Google successfully',
+            accessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                profilePic: user.profilePic
+            }
+        });
+    } catch (error) {
+        // ✨ FIXED: Improved Error Logging to catch DB/Schema issues
+        console.error('--- GOOGLE AUTH ROUTE ERROR ---');
+        console.error(error);
+
+        if (error.response) {
+            return res.status(401).json({
+                success: false,
+                message: 'Google API Error: ' + (error.response.data.error_description || error.response.data.error || 'Unauthorized')
+            });
+        }
+
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ success: false, message: 'DB Validation: ' + messages.join(', ') });
+        }
+
+        if (error.code === 11000) {
+            return res.status(409).json({ success: false, message: 'DB Duplicate Key Error on field: ' + Object.keys(error.keyValue)[0] });
+        }
+
+        res.status(500).json({ success: false, message: error.message || 'Internal server error' });
     }
 });
 

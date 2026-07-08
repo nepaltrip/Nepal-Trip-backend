@@ -4,41 +4,69 @@ const validator = require('validator');
 
 const userSchema = new mongoose.Schema({
     name: { type: String, required: [true, 'Name is required'], trim: true },
-    mobile: { type: String, required: [true, 'Mobile number is required'], unique: true, trim: true },
+
+    // Make mobile sparse so null values don't trigger unique constraints
+    mobile: {
+        type: String,
+        unique: true,
+        sparse: true,
+        trim: true
+    },
+
     email: {
         type: String, required: [true, 'Email is required'], unique: true, trim: true, lowercase: true,
         validate: [validator.isEmail, 'Please enter a valid email address']
     },
+
+    // Conditionally require password based on auth provider
     password: {
-        type: String, required: [true, 'Password is required'], minlength: 8,
-        validate: [validator.isStrongPassword, 'Password must contain at least 1 lowercase, 1 uppercase, 1 number, and 1 symbol']
+        type: String,
+        minlength: 8,
+        required: function () { return this.authProvider !== 'google'; },
+        validate: {
+            validator: function (v) {
+                if (this.authProvider === 'google') return true;
+                return validator.isStrongPassword(v);
+            },
+            message: 'Password must contain at least 1 lowercase, 1 uppercase, 1 number, and 1 symbol'
+        }
     },
+
     role: { type: String, enum: ['User', 'Admin', 'SuperAdmin'], default: 'User' },
     refreshTokens: [{ type: String }],
 
-    // --- NEW FIELDS ---
+    // --- NEW GOOGLE AUTH FIELDS ---
+    authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
+    googleId: { type: String, default: null },
+    profilePic: { type: String, default: null },
+
+    // --- EXISTING FIELDS ---
     location: {
         type: { type: String, enum: ['Point'], default: 'Point' },
-        coordinates: { type: [Number], default: [0, 0] } // Mongoose requires [longitude, latitude]
+        coordinates: { type: [Number], default: [0, 0] }
     },
     state: { type: String, default: null },
     district: { type: String, default: null },
-    lastLocationFetch: { type: Date, default: null }, // Used for the 24-hour cooldown
-
-    // PWA Push Notifications
+    lastLocationFetch: { type: Date, default: null },
     pushSubscription: { type: Object, default: null }
 }, { timestamps: true });
 
-// Geospatial Index for proximity queries
 userSchema.index({ location: '2dsphere' });
 
-userSchema.pre('save', async function () {
-    if (!this.isModified('password')) return;
+userSchema.pre('save', async function () { // 1. Remove 'next' parameter
+    // Skip hashing if it's a Google user or password isn't modified
+    if (!this.isModified('password') || this.authProvider === 'google') {
+        return; // 2. Just return to exit the function
+    }
+
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+
+    // 3. No need to call next() at the end! Mongoose knows it's done when the async function finishes.
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
+    if (this.authProvider === 'google' && !this.password) return false;
     return await bcrypt.compare(candidatePassword, this.password);
 };
 
