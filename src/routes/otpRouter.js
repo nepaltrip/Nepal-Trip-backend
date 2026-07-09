@@ -1,6 +1,5 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const { generateAndSendOTP } = require('../utils/otpUtils');
@@ -102,6 +101,38 @@ otpRouter.post('/verify-otp', async (req, res) => {
         res.status(200).json({ success: true, message: 'OTP verified successfully.', resetToken });
     } catch (error) {
         console.error('Verify OTP Error:', error.message);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// 3. Reset Password
+otpRouter.post('/reset-password', async (req, res) => {
+    try {
+        const { resetToken, newPassword } = req.body;
+        if (!resetToken || !newPassword) {
+            return res.status(400).json({ success: false, message: 'Token and new password are required' });
+        }
+
+        // Verify Reset Token
+        let decoded;
+        try {
+            decoded = jwt.verify(resetToken, process.env.ACCESS_TOKEN_SECRET);
+            if (decoded.purpose !== 'password_reset') throw new Error('Invalid token purpose');
+        } catch (err) {
+            return res.status(403).json({ success: false, message: 'Invalid or expired reset session. Please try again.' });
+        }
+
+        const user = await User.findOne({ email: decoded.email });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        // Update password & clear refresh tokens (forces log out across all devices)
+        user.password = newPassword;
+        user.refreshTokens = [];
+        await user.save(); // pre-save hook in User model will hash the new password
+
+        res.status(200).json({ success: true, message: 'Password reset successfully. You can now log in.' });
+    } catch (error) {
+        console.error('Reset Password Error:', error.message);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
