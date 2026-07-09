@@ -8,9 +8,9 @@ const userSchema = new mongoose.Schema({
     // Make mobile sparse so null values don't trigger unique constraints
     mobile: {
         type: String,
+        trim: true,
         unique: true,
-        sparse: true,
-        trim: true
+        sparse: true
     },
 
     email: {
@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema({
 
     // --- NEW GOOGLE AUTH FIELDS ---
     authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
-    googleId: { type: String, default: null },
+    googleId: { type: String, unique: true, sparse: true },
     profilePic: { type: String, default: null },
 
     // --- EXISTING FIELDS ---
