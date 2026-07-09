@@ -31,7 +31,7 @@ const pageContentSchema = new mongoose.Schema({
     testimonialsTitle: { type: String, default: "Loved by travelers" },
 
     // Bottom CTA Section
-    showCtaCard: { type: Boolean, default: true }, // <--- THIS LINE WAS MISSING
+    showCtaCard: { type: Boolean, default: true },
     ctaSubtitle: { type: String, default: "Know before you go" },
     ctaTitle: { type: String, default: "Haven't decided where to go yet? Let's fix that." },
     ctaBody: { type: String, default: "Explore local trivia, practical travel insights, and discover the perfect destination based on your vibe." },
