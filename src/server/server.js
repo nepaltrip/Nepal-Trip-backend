@@ -6,6 +6,9 @@ const connectDB = require('../database/database');
 const authRouter = require('../routes/authRouter');
 const userRouter = require('../routes/userRouter');
 const otpRouter = require('../routes/otpRouter');
+const packageRouter = require('../routes/packageRouter');
+const pageContentRouter = require('../routes/pageContentRouter');
+const mediaRouter = require('../routes/mediaRouter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,10 +31,9 @@ app.use(cookieParser());
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
 app.use('/api/otp', otpRouter);
-
-app.get('/', (req, res) => {
-    res.send('API is running...');
-});
+app.use('/api/packages', packageRouter);
+app.use('/api/content', pageContentRouter);
+app.use('/api/media', mediaRouter);
 
 const startServer = async () => {
     try {
