@@ -22,7 +22,10 @@ const packageSchema = new mongoose.Schema({
 
     duration_days: { type: Number, required: true },
     duration_nights: { type: Number, required: true },
-    price_inr: { type: Number, required: true },
+    price_gold: { type: Number },
+    price_platinum: { type: Number },
+
+    linkedPackage: { type: mongoose.Schema.Types.ObjectId, ref: 'Package' },
 
     cover_image_mobile: { type: String, required: true },
     cover_image_desktop: { type: String, required: true },
