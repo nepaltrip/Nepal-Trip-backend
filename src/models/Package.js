@@ -29,7 +29,7 @@ const packageSchema = new mongoose.Schema({
     gallery_images: [{ type: String }],
 
     short_description: { type: String, required: true },
-    full_description: { type: String },
+    full_description: { type: String }, // Cleanly kept here
 
     itinerary: [itinerarySchema],
     inclusions: [{ type: String }],
@@ -39,6 +39,11 @@ const packageSchema = new mongoose.Schema({
     bestTime: { type: String },
     weather: { type: String },
     trivia: { type: String },
+
+    // New UX fields for PackageDetail page mappings
+    about_title: { type: String },
+    price_subtitle: { type: String },
+    sidebar_features: [{ type: String }],
 
     totalClicks: { type: Number, default: 0 },
     galleryConversions: { type: Number, default: 0 },
