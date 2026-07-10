@@ -9,31 +9,37 @@ const itinerarySchema = new mongoose.Schema({
 const packageSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, lowercase: true },
-    category: { type: String, required: true, enum: ["Mountains", "Beach", "Nature", "Honeymoon", "Heritage", "Culture"] },
+
+    // Enum removed to allow custom category creation
+    category: { type: String, required: true },
+
+    serviceTier: {
+        type: String,
+        enum: ["All", "Gold", "Platinum"],
+        default: "All"
+    },
     destination: { type: String, required: true },
 
-    durationDays: { type: Number, required: true },
-    durationNights: { type: Number, required: true },
-    priceInr: { type: Number, required: true },
+    duration_days: { type: Number, required: true },
+    duration_nights: { type: Number, required: true },
+    price_inr: { type: Number, required: true },
 
-    coverImageMobile: { type: String, required: true },
-    coverImageDesktop: { type: String, required: true },
-    galleryImages: [{ type: String }],
+    cover_image_mobile: { type: String, required: true },
+    cover_image_desktop: { type: String, required: true },
+    gallery_images: [{ type: String }],
 
-    shortDescription: { type: String, required: true },
-    fullDescription: { type: String },
+    short_description: { type: String, required: true },
+    full_description: { type: String },
 
     itinerary: [itinerarySchema],
     inclusions: [{ type: String }],
     exclusions: [{ type: String }],
 
-    // Discover page specific stats
     altitude: { type: String },
     bestTime: { type: String },
     weather: { type: String },
     trivia: { type: String },
 
-    // Analytics & Tracking
     totalClicks: { type: Number, default: 0 },
     galleryConversions: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true }
