@@ -10,6 +10,7 @@ const packageRouter = require('../routes/packageRouter');
 const pageContentRouter = require('../routes/pageContentRouter');
 const mediaRouter = require('../routes/mediaRouter');
 const inquiryRouter = require('../routes/inquiryRouter');
+const { keepServerAwake } = require('../jobs/keepAwake');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,6 +43,7 @@ const startServer = async () => {
         await connectDB();
         app.listen(PORT, () => {
             console.log(`Server is ONLINE at PORT : ${PORT}`);
+            keepServerAwake();
         });
     } catch (err) {
         console.log("Server initiation failed:", err.message);
