@@ -9,6 +9,7 @@ const otpRouter = require('../routes/otpRouter');
 const packageRouter = require('../routes/packageRouter');
 const pageContentRouter = require('../routes/pageContentRouter');
 const mediaRouter = require('../routes/mediaRouter');
+const inquiryRouter = require('../routes/inquiryRouter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,6 +35,7 @@ app.use('/api/otp', otpRouter);
 app.use('/api/packages', packageRouter);
 app.use('/api/content', pageContentRouter);
 app.use('/api/media', mediaRouter);
+app.use('/api/inquiries', inquiryRouter);
 
 const startServer = async () => {
     try {

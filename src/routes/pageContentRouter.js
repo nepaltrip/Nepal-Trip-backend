@@ -7,6 +7,7 @@ const AboutContent = require('../models/AboutContent');
 
 const { superAdminAuth, userAuth } = require('../middleware/authMiddleware');
 const TestimonialContent = require('../models/TestimonialContent');
+const ContactContent = require('../models/ContactContent');
 
 // GLOBAL ROUTES (Home Page / Footer / Nav)
 
@@ -118,6 +119,36 @@ pageContentRouter.put('/testimonials', userAuth, superAdminAuth, async (req, res
         res.status(200).json(updatedConfig);
     } catch (error) {
         res.status(500).json({ message: "Failed to update testimonials.", error: error.message });
+    }
+});
+
+// GET Contact Layout
+pageContentRouter.get('/contact', async (req, res) => {
+    try {
+        let config = await ContactContent.findOne({ singletonId: "contactConfig" });
+        if (!config) config = await ContactContent.create({ singletonId: "contactConfig" });
+        res.status(200).json(config);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching contact configuration." });
+    }
+});
+
+// PUT Contact Layout (SuperAdmin)
+pageContentRouter.put('/contact', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        if (req.body.formFields) {
+            req.body.formFields.forEach(item => {
+                if (item._id && !mongoose.Types.ObjectId.isValid(item._id)) delete item._id;
+            });
+        }
+        const updatedConfig = await ContactContent.findOneAndUpdate(
+            { singletonId: "contactConfig" },
+            { $set: req.body },
+            { returnDocument: 'after', upsert: true }
+        );
+        res.status(200).json(updatedConfig);
+    } catch (error) {
+        res.status(500).json({ message: "Failed to update contact configuration." });
     }
 });
 
