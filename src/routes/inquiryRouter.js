@@ -3,7 +3,7 @@ const inquiryRouter = express.Router();
 const Inquiry = require('../models/Inquiry');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const NotificationService = require('../services/NotificationService'); // ✨ IMPORT YOUR SERVICE
+const NotificationService = require('../services/NotificationService');
 const { sendWebPush } = require('../services/pushService');
 const { userAuth } = require('../middleware/authMiddleware');
 
@@ -28,6 +28,11 @@ inquiryRouter.post('/', async (req, res) => {
         const admins = await User.find({ role: { $in: ['Admin', 'SuperAdmin'] } });
         const io = req.app.get('io');
         const onlineUsers = req.app.get('onlineUsers');
+
+        // ✨ REAL-TIME SYNC: Instantly increment dashboard counters across all active admin panels
+        if (io) {
+            io.to('admin_room').emit('dashboard_counter_update', { action: 'increment_inquiry' });
+        }
 
         let isAnyAdminOnline = false;
         const offlineAdminEmails = [];
@@ -64,7 +69,6 @@ inquiryRouter.post('/', async (req, res) => {
             });
         }
 
-        // ✨ CLEANED UP: Calling your centralized email service
         if (offlineAdminEmails.length > 0) {
             await NotificationService.sendAdminInquiryAlertEmail(offlineAdminEmails, source);
         }
@@ -94,10 +98,16 @@ inquiryRouter.post('/:id/reply', userAuth, async (req, res) => {
         inquiry.status = 'replied';
         await inquiry.save();
 
+        const io = req.app.get('io');
+
+        // ✨ REAL-TIME SYNC: Instantly decrement pending replies across all active admin panels
+        if (io) {
+            io.to('admin_room').emit('dashboard_counter_update', { action: 'decrement_pending' });
+        }
+
         const customerEmail = inquiry.formData.email;
         const customerName = inquiry.formData.name || 'Traveler';
 
-        // ✨ CLEANED UP: Calling your centralized email service
         await NotificationService.sendInquiryReplyEmail(customerEmail, customerName, replyMessage);
 
         if (inquiry.userId) {
@@ -110,7 +120,6 @@ inquiryRouter.post('/:id/reply', userAuth, async (req, res) => {
 
             await sendWebPush(inquiry.userId, "Nepal Trip Support", "An admin has responded to your inquiry!", "/");
 
-            const io = req.app.get('io');
             const onlineUsers = req.app.get('onlineUsers');
 
             if (onlineUsers.has(inquiry.userId.toString())) {

@@ -16,6 +16,8 @@ const inquiryRouter = require('../routes/inquiryRouter');
 const galleryRouter = require('../routes/galleryRouter');
 const notificationRouter = require('../routes/notificationRouter'); // ✨ ADDED
 const { keepServerAwake } = require('../jobs/keepAwake');
+const superAdminRouter = require('../routes/superAdminRouter');
+const { trackTraffic } = require('../middleware/trafficMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -80,6 +82,7 @@ io.on('connection', (socket) => {
 // Make io & onlineUsers globally accessible in routes
 app.set('io', io);
 app.set('onlineUsers', onlineUsers);
+app.use(trackTraffic);
 
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
@@ -89,7 +92,8 @@ app.use('/api/content', pageContentRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/inquiries', inquiryRouter);
 app.use('/api/gallery', galleryRouter);
-app.use('/api/notifications', notificationRouter); // ✨ ADDED
+app.use('/api/notifications', notificationRouter);
+app.use('/api/superadmin', superAdminRouter);
 
 const startServer = async () => {
     try {

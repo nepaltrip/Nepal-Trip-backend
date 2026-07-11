@@ -239,7 +239,7 @@ galleryRouter.delete('/:id', userAuth, superAdminAuth, async (req, res) => {
 });
 
 
-// POST: Intelligent View Tracker with 10-Min Cooldown
+// POST: Intelligent View Tracker with 10-Min Cooldown & Real-Time Admin Sync
 galleryRouter.post('/:id/view', async (req, res) => {
     try {
         const { id } = req.params;
@@ -282,6 +282,16 @@ galleryRouter.post('/:id/view', async (req, res) => {
             const galleryItem = await GalleryItem.findByIdAndUpdate(
                 id, { $inc: { views: 1 } }, { new: true }
             );
+
+            // ✨ REAL-TIME SYNC: Broadcast updated view metrics straight to the Admin panel room
+            const io = req.app.get('io');
+            if (io) {
+                io.to('admin_room').emit('gallery_view_update', {
+                    mediaId: id,
+                    views: galleryItem.views
+                });
+            }
+
             return res.status(200).json({ success: true, views: galleryItem.views });
         } else {
             // Return current views without incrementing (Cooldown active)
