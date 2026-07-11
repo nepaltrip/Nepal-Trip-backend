@@ -52,6 +52,45 @@ const NotificationService = {
         } catch (error) {
             console.error("Error sending reset email via service:", error.message);
         }
+    },
+
+    // 4. Admin Alert for New Inquiry Template Execution
+    sendAdminInquiryAlertEmail: async (adminEmailsArray, source) => {
+        try {
+            const title = "New Lead Alert";
+            const bodyText = `
+                <p>A new inquiry was submitted via the <b>${source || 'General'}</b>.</p>
+                <p>Log in to your dashboard to view the details and respond to the traveler.</p>
+            `;
+            const actionButtonHtml = `<a href="${process.env.FRONTEND_URL}/admin/inquiries" class="btn">View Inquiry</a>`;
+
+            const compiledHtml = getMasterTemplate(title, bodyText, actionButtonHtml);
+
+            // Join the array of emails into a comma-separated string
+            await sendEmail(adminEmailsArray.join(','), "New Lead Received - Nepal Trip", compiledHtml);
+        } catch (error) {
+            console.error("Error sending admin alert email via service:", error.message);
+        }
+    },
+    // 5. Inquiry Reply Email Template Execution
+    sendInquiryReplyEmail: async (userEmail, userName, replyMessage) => {
+        try {
+            const title = "Response to Your Inquiry";
+            const bodyText = `
+                <p>Hi ${userName},</p>
+                <p>Our team has reviewed your inquiry regarding your upcoming trip!</p>
+                <div style="background-color: #f9f6f0; padding: 15px; border-left: 4px solid #e05e2b; margin: 20px 0;">
+                    <p style="margin: 0; white-space: pre-wrap;">${replyMessage}</p>
+                </div>
+                <p>If you have further questions, feel free to reply directly to this email.</p>
+            `;
+            const actionButtonHtml = `<a href="${process.env.FRONTEND_URL}" class="btn">Return to Nepal Trip</a>`;
+
+            const compiledHtml = getMasterTemplate(title, bodyText, actionButtonHtml);
+            await sendEmail(userEmail, "Nepal Trip - Inquiry Response", compiledHtml);
+        } catch (error) {
+            console.error("Error sending inquiry reply email via service:", error.message);
+        }
     }
 };
 
