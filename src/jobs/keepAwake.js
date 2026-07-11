@@ -6,7 +6,7 @@ const keepServerAwake = () => {
         try {
             // It's best practice to use an environment variable for your live URL
             // Fallback to localhost for testing if needed
-            const serverUrl = process.env.SERVER_URL || 'https://your-production-app-url.com';
+            const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
 
             const response = await fetch(serverUrl);
             console.log(`[Self-Ping] Server triggered at ${new Date().toLocaleTimeString()}. Status: ${response.status}`);
