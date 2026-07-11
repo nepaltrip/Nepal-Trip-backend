@@ -11,7 +11,7 @@ const keepServerAwake = () => {
             const response = await fetch(serverUrl);
             console.log(`[Self-Ping] Server triggered at ${new Date().toLocaleTimeString()}. Status: ${response.status}`);
         } catch (error) {
-            console.error('[Self-Ping] Failed to ping server:', error.message);
+            console.error('[Self-Ping] Failed to ping server:', error.message); 
         }
     });
 
