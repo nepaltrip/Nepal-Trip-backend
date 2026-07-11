@@ -40,6 +40,12 @@ const userSchema = new mongoose.Schema({
     googleId: { type: String, unique: true, sparse: true },
     profilePic: { type: String, default: null },
 
+    viewedGalleryItems: [{
+        mediaId: { type: mongoose.Schema.Types.ObjectId, ref: 'GalleryItem' },
+        count: { type: Number, default: 1 },
+        lastViewedAt: { type: Date, default: Date.now }
+    }],
+
     // --- EXISTING FIELDS ---
     location: {
         type: { type: String, enum: ['Point'], default: 'Point' },

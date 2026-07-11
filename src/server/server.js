@@ -11,6 +11,7 @@ const pageContentRouter = require('../routes/pageContentRouter');
 const mediaRouter = require('../routes/mediaRouter');
 const inquiryRouter = require('../routes/inquiryRouter');
 const { keepServerAwake } = require('../jobs/keepAwake');
+const galleryRouter = require('../routes/galleryRouter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -37,6 +38,7 @@ app.use('/api/packages', packageRouter);
 app.use('/api/content', pageContentRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/inquiries', inquiryRouter);
+app.use('/api/gallery', galleryRouter);
 
 const startServer = async () => {
     try {
