@@ -82,7 +82,10 @@ io.on('connection', (socket) => {
 // Make io & onlineUsers globally accessible in routes
 app.set('io', io);
 app.set('onlineUsers', onlineUsers);
-app.use(trackTraffic);
+
+app.post('/api/analytics/hit', trackTraffic, (req, res) => {
+    res.status(200).json({ success: true });
+});
 
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
