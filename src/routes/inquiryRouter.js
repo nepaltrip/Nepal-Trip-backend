@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { sendWebPush } = require('../services/pushService');
 const { userAuth } = require('../middleware/authMiddleware');
-const NotificationService = require('../services/NotificationService');
+const notificationService = require('../services/notificationService');
 
 // --- SUBMIT NEW INQUIRY ---
 inquiryRouter.post('/', async (req, res) => {
@@ -70,7 +70,7 @@ inquiryRouter.post('/', async (req, res) => {
         }
 
         if (offlineAdminEmails.length > 0) {
-            await NotificationService.sendAdminInquiryAlertEmail(offlineAdminEmails, source);
+            await notificationService.sendAdminInquiryAlertEmail(offlineAdminEmails, source);
         }
 
         res.status(201).json({ message: "Inquiry submitted successfully!" });
@@ -108,7 +108,7 @@ inquiryRouter.post('/:id/reply', userAuth, async (req, res) => {
         const customerEmail = inquiry.formData.email;
         const customerName = inquiry.formData.name || 'Traveler';
 
-        await NotificationService.sendInquiryReplyEmail(customerEmail, customerName, replyMessage);
+        await notificationService.sendInquiryReplyEmail(customerEmail, customerName, replyMessage);
 
         if (inquiry.userId) {
             const savedNotification = await Notification.create({
