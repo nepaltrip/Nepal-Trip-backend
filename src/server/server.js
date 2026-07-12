@@ -18,6 +18,7 @@ const notificationRouter = require('../routes/notificationRouter'); // ✨ ADDED
 const { keepServerAwake } = require('../jobs/keepAwake');
 const superAdminRouter = require('../routes/superAdminRouter');
 const { trackTraffic } = require('../middleware/trafficMiddleware');
+const discoverRouter = require('../routes/discoverRouter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -97,6 +98,7 @@ app.use('/api/inquiries', inquiryRouter);
 app.use('/api/gallery', galleryRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/superadmin', superAdminRouter);
+app.use('/api/discover', discoverRouter);
 
 const startServer = async () => {
     try {
