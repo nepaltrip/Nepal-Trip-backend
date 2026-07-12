@@ -3,6 +3,7 @@ const axios = require('axios'); // ✨ FIXED: Standard Node.js CommonJS import
 const User = require('../models/User');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/token');
 const getCookieOptions = require('../config/cookieConfig');
+const NotificationService = require('../services/NotificationService');
 
 const authRouter = express.Router();
 
@@ -36,7 +37,6 @@ authRouter.post('/signup', async (req, res) => {
 
         await newUser.save();
 
-        const NotificationService = require('../services/notificationService');
         NotificationService.sendWelcomeEmail(newUser.email, newUser.name).catch((err) => {
             console.error('Background Email Error:', err.message);
         });

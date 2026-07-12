@@ -3,9 +3,9 @@ const inquiryRouter = express.Router();
 const Inquiry = require('../models/Inquiry');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const NotificationService = require('../services/NotificationService');
 const { sendWebPush } = require('../services/pushService');
 const { userAuth } = require('../middleware/authMiddleware');
+const NotificationService = require('../services/NotificationService');
 
 // --- SUBMIT NEW INQUIRY ---
 inquiryRouter.post('/', async (req, res) => {
