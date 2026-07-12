@@ -9,6 +9,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const s3Client = require('../config/s3'); // Custom configured R2 client
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const MediaInteraction = require('../models/MediaInteraction');
 
 // --------------------------------------------------
 // PUBLIC ENDPOINTS
@@ -203,7 +204,7 @@ galleryRouter.put('/:id', userAuth, superAdminAuth, async (req, res) => {
         const updatedItem = await GalleryItem.findByIdAndUpdate(
             req.params.id,
             { $set: req.body },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
         if (!updatedItem) return res.status(404).json({ message: "Gallery item not found." });
         res.status(200).json({ success: true, data: updatedItem });
@@ -238,68 +239,88 @@ galleryRouter.delete('/:id', userAuth, superAdminAuth, async (req, res) => {
     }
 });
 
-
 // POST: Intelligent View Tracker with 10-Min Cooldown & Real-Time Admin Sync
 galleryRouter.post('/:id/view', async (req, res) => {
     try {
         const { id } = req.params;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+        const userAgent = req.headers['user-agent'] || '';
+        const ipHash = req.body.visitorId || crypto.createHash('md5').update(`${ip}-${userAgent}`).digest('hex');
+
+        let userId = null;
         const token = req.cookies.token || (req.headers.authorization && req.headers.authorization.split(" ")[1]);
-
-        let shouldIncrementGlobal = true;
-
         if (token) {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                const user = await User.findById(decoded.id);
-
-                if (user) {
-                    const existingMediaIndex = user.viewedGalleryItems.findIndex(
-                        item => item.mediaId.toString() === id
-                    );
-
-                    if (existingMediaIndex > -1) {
-                        const lastView = user.viewedGalleryItems[existingMediaIndex].lastViewedAt;
-                        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-
-                        // If user viewed this less than 10 minutes ago, BLOCK the increment
-                        if (lastView > tenMinutesAgo) {
-                            shouldIncrementGlobal = false;
-                        } else {
-                            user.viewedGalleryItems[existingMediaIndex].count += 1;
-                            user.viewedGalleryItems[existingMediaIndex].lastViewedAt = Date.now();
-                        }
-                    } else {
-                        user.viewedGalleryItems.push({ mediaId: id, count: 1, lastViewedAt: Date.now() });
-                    }
-                    if (shouldIncrementGlobal) await user.save({ validateBeforeSave: false });
-                }
-            } catch (err) {
-                // Invalid token fallback
-            }
+                userId = decoded.id;
+            } catch (err) { }
         }
 
-        if (shouldIncrementGlobal) {
-            const galleryItem = await GalleryItem.findByIdAndUpdate(
-                id, { $inc: { views: 1 } }, { new: true }
+        const isNewView = await MediaInteraction.findOneAndUpdate(
+            { mediaId: id, ipHash, dateString: todayStr },
+            { $setOnInsert: { mediaId: id, ipHash, dateString: todayStr, userId } },
+            { upsert: true, returnDocument: 'before' }
+        );
+
+        if (!isNewView) {
+            // 1. Increment All-Time Views & Return the updated document
+            const updatedItem = await GalleryItem.findByIdAndUpdate(
+                id, { $inc: { views: 1 } }, { returnDocument: 'after', runValidators: true }
             );
 
-            // ✨ REAL-TIME SYNC: Broadcast updated view metrics straight to the Admin panel room
+            // 2. Count 7-Day Views
+            const recentCount = await MediaInteraction.countDocuments({ mediaId: id });
+
+            // 3. Broadcast BOTH to SuperAdmin
             const io = req.app.get('io');
             if (io) {
                 io.to('admin_room').emit('gallery_view_update', {
                     mediaId: id,
-                    views: galleryItem.views
+                    allTimeViews: updatedItem.views,
+                    trendingViews: recentCount
                 });
             }
-
-            return res.status(200).json({ success: true, views: galleryItem.views });
-        } else {
-            // Return current views without incrementing (Cooldown active)
-            const item = await GalleryItem.findById(id).select('views');
-            return res.status(200).json({ success: false, message: "Cooldown active", views: item.views });
+            return res.status(200).json({ success: true, allTimeViews: updatedItem.views, trendingViews: recentCount });
         }
+
+        // Cooldown active: Return current stats without incrementing
+        const item = await GalleryItem.findById(id).select('views');
+        const currentCount = await MediaInteraction.countDocuments({ mediaId: id });
+        return res.status(200).json({ success: false, message: "View already counted", allTimeViews: item.views, trendingViews: currentCount });
+
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: "Failed to update view count." });
+    }
+});
+
+galleryRouter.get('/trending', async (req, res) => {
+    try {
+        const trending = await MediaInteraction.aggregate([
+            { $group: { _id: "$mediaId", recentViews: { $sum: 1 } } },
+            { $sort: { recentViews: -1 } },
+            { $limit: 50 },
+            { $lookup: { from: 'galleryitems', localField: '_id', foreignField: '_id', as: 'media' } },
+            { $unwind: "$media" },
+            {
+                $project: {
+                    _id: "$media._id",
+                    title: "$media.title",
+                    locationTag: "$media.locationTag",
+                    mediaUrl: "$media.mediaUrl",
+                    thumbnailUrl: "$media.thumbnailUrl",
+                    fileType: "$media.fileType",
+                    allTimeViews: "$media.views", // 👁️ Lifetime Views
+                    trendingViews: "$recentViews" // 🔥 7-Day Views
+                }
+            }
+        ]);
+        res.status(200).json({ success: true, data: trending });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Failed to fetch trending media" });
     }
 });
 

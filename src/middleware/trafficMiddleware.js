@@ -17,7 +17,7 @@ const trackTraffic = async (req, res, next) => {
         const isNewVisitToday = await Traffic.findOneAndUpdate(
             { dateString: todayStr, ipHash: visitorSignature },
             { $setOnInsert: { dateString: todayStr, ipHash: visitorSignature, deviceType, userId } },
-            { upsert: true, new: false }
+            { upsert: true, returnDocument: 'before' } // Return the document before the update to check if it existed
         );
 
         if (!isNewVisitToday) {

@@ -97,7 +97,7 @@ userRouter.post('/location', userAuth, async (req, res) => {
                     lastLocationFetch: new Date()
                 }
             },
-            { new: true, runValidators: true } // Return the freshly modified document
+            { returnDocument: 'after', runValidators: true } // Return the freshly modified document
         );
 
         res.status(200).json({

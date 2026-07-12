@@ -91,7 +91,7 @@ packageRouter.put('/:id', userAuth, superAdminAuth, async (req, res) => {
         const updatedPackage = await Package.findByIdAndUpdate(
             req.params.id,
             { $set: req.body },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
         if (!updatedPackage) return res.status(404).json({ message: "Package not found." });
         res.status(200).json(updatedPackage);
