@@ -47,8 +47,11 @@ inquiryRouter.post('/', async (req, res) => {
                 type: 'inquiry'
             });
 
+            // ✨ Route each admin to their own panel
+            const targetUrl = admin.role === 'SuperAdmin' ? '/superadmin/inquiries' : '/admin/inquiries';
+
             webPushPromises.push(
-                sendWebPush(admin._id, "New Lead Received 🚀", `Inquiry from ${finalFormData.name || 'a user'}`, "/admin/inquiries")
+                sendWebPush(admin._id, "New Lead Received 🚀", `Inquiry from ${finalFormData.name || 'a user'}`, targetUrl)
             );
 
             if (onlineUsers.has(admin._id.toString())) {
