@@ -1,32 +1,22 @@
 const mongoose = require('mongoose');
 
 const inquirySchema = new mongoose.Schema({
-    // Captures all dynamic fields (Name, Email, Phone, Travelers, etc.)
-    formData: {
-        type: mongoose.Schema.Types.Mixed,
-        required: true
-    },
-    // Tracks where the inquiry came from (e.g., "Contact Page", "Package Details")
-    source: {
-        type: String,
-        default: 'General'
-    },
-    // CRM tracking fields
+    formData: { type: mongoose.Schema.Types.Mixed, required: true },
+    source: { type: String, default: 'General' },
     status: {
         type: String,
-        enum: ['unread', 'read', 'replied'],
+        enum: ['unread', 'read', 'replied', 'closed'],
         default: 'unread'
     },
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    },
-    packageId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Package',
-        default: null
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', default: null },
+    hiddenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    expiresAt: {
+        type: Date,
+        default: Date.now
     }
 }, { timestamps: true });
+
+inquirySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 1296000 });
 
 module.exports = mongoose.model('Inquiry', inquirySchema);

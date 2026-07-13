@@ -25,7 +25,20 @@ notificationRouter.get('/', userAuth, async (req, res) => {
 // Mark as read
 notificationRouter.put('/:id/read', userAuth, async (req, res) => {
     try {
-        await Notification.findOneAndUpdate({ _id: req.params.id, recipient: req.user.id }, { isRead: true });
+        // Find, update, and set the clock to NOW
+        const result = await Notification.findOneAndUpdate(
+            { _id: req.params.id, recipient: req.user.id },
+            {
+                $set: {
+                    isRead: true,
+                    readAt: new Date() // ✨ This starts the 15-day TTL countdown
+                }
+            },
+            { new: true }
+        );
+
+        if (!result) return res.status(404).json({ message: "Notification not found" });
+
         res.status(200).json({ success: true });
     } catch (error) {
         res.status(500).json({ message: "Failed to update notification" });
@@ -88,7 +101,15 @@ notificationRouter.get('/unread-count', userAuth, async (req, res) => {
 // ✨ NEW: Mark all notifications as read at once
 notificationRouter.put('/mark-all-read', userAuth, async (req, res) => {
     try {
-        await Notification.updateMany({ recipient: req.user.id, isRead: false }, { isRead: true });
+        await Notification.updateMany(
+            { recipient: req.user.id, isRead: false },
+            {
+                $set: {
+                    isRead: true,
+                    readAt: new Date() // ✨ Sets the countdown for all of them
+                }
+            }
+        );
         res.status(200).json({ success: true });
     } catch (error) {
         res.status(500).json({ message: "Failed to update notifications" });

@@ -17,6 +17,30 @@ const userAuth = (req, res, next) => {
     }
 };
 
+// ✨ NEW: Optional Auth for routes that guests CAN access, but logged-in users get extra benefits
+const optionalAuth = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        // If no token exists, just move on! The user is treated as a guest.
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return next();
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        // If a token exists, verify it and attach the user data
+        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        req.user = decoded;
+
+        next();
+    } catch (error) {
+        // If the token exists but is invalid or expired, don't crash. 
+        // Just treat them as a guest instead of throwing a 401 error.
+        next();
+    }
+};
+
 const adminAuth = (req, res, next) => {
     userAuth(req, res, () => {
         // Convert role to lowercase for case-insensitive matching
@@ -43,6 +67,7 @@ const superAdminAuth = (req, res, next) => {
 
 module.exports = {
     userAuth,
+    optionalAuth,
     adminAuth,
     superAdminAuth
 };
