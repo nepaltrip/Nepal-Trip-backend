@@ -39,12 +39,17 @@ const getVibeStats = async () => {
                 allUsers: {
                     $push: {
                         $cond: [
-                            { $ne: ["$_id.userId", null] }, // Only push registered users
+                            {
+                                $and: [
+                                    { $ne: ["$_id.userId", null] },
+                                    { $ne: [{ $type: "$userDoc" }, "missing"] }
+                                ]
+                            },
                             {
                                 id: "$_id.userId",
                                 name: "$userDoc.name",
                                 email: "$userDoc.email",
-                                photo: "$userDoc.photo", // Change if your schema uses 'profilePic'
+                                photo: "$userDoc.profilePic",
                                 timeSpent: "$userTotalTime"
                             },
                             "$$REMOVE"

@@ -3,6 +3,7 @@ const discoverRouter = express.Router();
 const VibeInteraction = require('../models/VibeInteraction');
 // ✨ Import both functions here
 const { broadcastVibeMetrics, getVibeStats } = require('../utils/vibeAnalytics');
+const User = require('../models/User');
 
 // ✨ ADD THE MISSING GET ROUTE
 // GET: Initial load for SuperAdmin Dashboard
@@ -32,6 +33,10 @@ discoverRouter.post('/track', async (req, res) => {
             galleryClicked: galleryClicked ? true : false,
             isBounce: isBounce ? true : false
         });
+
+        if (userId) {
+            await User.findByIdAndUpdate(userId, { $inc: { totalPackageVisits: 1 } });
+        }
 
         // Grab socket instance and broadcast the fresh data
         const io = req.app.get('io');

@@ -74,4 +74,24 @@ notificationRouter.post('/subscribe-push', userAuth, async (req, res) => {
     }
 });
 
+
+// ✨ NEW: Get unread count for the red dot indicator
+notificationRouter.get('/unread-count', userAuth, async (req, res) => {
+    try {
+        const count = await Notification.countDocuments({ recipient: req.user.id, isRead: false });
+        res.status(200).json({ count });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+});
+
+// ✨ NEW: Mark all notifications as read at once
+notificationRouter.put('/mark-all-read', userAuth, async (req, res) => {
+    try {
+        await Notification.updateMany({ recipient: req.user.id, isRead: false }, { isRead: true });
+        res.status(200).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to update notifications" });
+    }
+});
 module.exports = notificationRouter;

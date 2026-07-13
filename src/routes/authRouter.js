@@ -78,6 +78,11 @@ authRouter.post('/login', async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid User credentials' });
         }
 
+        // ✨ NEW: Check if the user is banned before checking the password
+        if (user.status === 'banned') {
+            return res.status(403).json({ success: false, message: 'Your account has been banned !!!' });
+        }
+
         const isMatch = await user.comparePassword(password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: 'Invalid User credentials' });
@@ -124,6 +129,15 @@ authRouter.post('/refresh-token', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Invalid or expired refresh token' });
         }
 
+        // ✨ NEW: Boot the user out if they were banned while logged in
+        if (user.status === 'banned') {
+            // Optional: You could also wipe their refresh tokens here to force a hard logout
+            user.refreshTokens = [];
+            await user.save();
+            res.clearCookie('refreshToken', getCookieOptions());
+            return res.status(403).json({ success: false, message: 'Your account has been banned !!!' });
+        }
+
         const newAccessToken = generateAccessToken(user);
         const newRefreshToken = generateRefreshToken(user);
 
@@ -136,7 +150,7 @@ authRouter.post('/refresh-token', async (req, res) => {
         res.status(200).json({
             success: true,
             accessToken: newAccessToken,
-            user: { // ✨ Restores user state on page refresh
+            user: {
                 id: user._id,
                 name: user.name,
                 email: user.email,
@@ -180,18 +194,20 @@ authRouter.post('/google', async (req, res) => {
             return res.status(400).json({ success: false, message: 'No access token provided' });
         }
 
-        // 1. Fetch user profile securely from Google
         const googleResponse = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${access_token}` }
         });
 
         const { email, name, picture, sub: uid } = googleResponse.data;
 
-        // 2. Check if user already exists
         let user = await User.findOne({ email: email.toLowerCase() });
 
         if (user) {
-            // Link Google profile to existing user if not already linked
+            // ✨ NEW: Check if the user is banned before letting them in via Google
+            if (user.status === 'banned') {
+                return res.status(403).json({ success: false, message: 'Your account has been banned !!!' });
+            }
+
             if (!user.googleId) {
                 user.googleId = uid;
                 user.authProvider = 'google';
@@ -199,7 +215,6 @@ authRouter.post('/google', async (req, res) => {
                 await user.save();
             }
         } else {
-            // 3. Register New Google User
             user = new User({
                 name: name,
                 email: email.toLowerCase(),
@@ -210,7 +225,6 @@ authRouter.post('/google', async (req, res) => {
             await user.save();
         }
 
-        // 4. Generate custom standard JWTs
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 

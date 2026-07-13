@@ -3,7 +3,7 @@ const userRouter = express.Router();
 const Fuse = require('fuse.js');
 const { State, City } = require('country-state-city');
 const User = require('../models/User');
-const { userAuth } = require('../middleware/authMiddleware');
+const { userAuth, superAdminAuth, adminAuth } = require('../middleware/authMiddleware');
 
 // ==========================================
 // IMPROVED HELPER: Case-Insensitive Fuzzy Match
@@ -127,6 +127,169 @@ userRouter.post('/push-subscribe', userAuth, async (req, res) => {
     } catch (error) {
         console.error("Push subscription error:", error);
         res.status(500).json({ message: "Server error saving push subscription" });
+    }
+});
+
+// ==========================================
+// ROUTE: Update User Profile (User/Admin/SuperAdmin)
+// ==========================================
+userRouter.put('/:id', userAuth, adminAuth, superAdminAuth, async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const requestingUser = req.user;
+
+        // 1. Permission Check
+        const isSelf = requestingUser.id === targetUserId;
+        const isAdmin = requestingUser.role === 'Admin';
+        const isSuperAdmin = requestingUser.role === 'SuperAdmin';
+
+        if (!isSelf && !isAdmin && !isSuperAdmin) {
+            return res.status(403).json({ message: "Not authorized to edit this profile" });
+        }
+
+        // 2. Prepare Update Data
+        const { name, email, phone, role } = req.body;
+        let updateFields = {};
+
+        if (name) updateFields.name = name;
+        if (email) updateFields.email = email;
+
+        // Map frontend 'phone' to DB 'mobile'
+        if (phone !== undefined) updateFields.mobile = phone;
+
+        // 3. Strict Role Modification Protection
+        // Only SuperAdmins are allowed to elevate or downgrade user roles
+        if (role && role !== 'User' && !isSuperAdmin) {
+            return res.status(403).json({ message: "Only SuperAdmins can modify access roles." });
+        } else if (role && isSuperAdmin) {
+            updateFields.role = role;
+        }
+
+        // 4. Update the Database
+        const updatedUser = await User.findByIdAndUpdate(
+            targetUserId,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        ).select('-password -refreshTokens');
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // 5. Send back formatted data matching frontend expectations
+        res.status(200).json({
+            message: "Profile updated successfully",
+            user: {
+                id: updatedUser._id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                phone: updatedUser.mobile,
+                role: updatedUser.role,
+                location: updatedUser.district ? `${updatedUser.district}, ${updatedUser.state}` : '',
+            }
+        });
+
+    } catch (error) {
+        console.error("Profile update error:", error);
+
+        // Catch MongoDB Unique Constraint Errors (e.g., email or phone already in use)
+        if (error.code === 11000) {
+            return res.status(400).json({ message: "Email or phone number is already in use by another account." });
+        }
+
+        res.status(500).json({ message: "Server error updating profile" });
+    }
+});
+
+
+// ==========================================
+// ROUTE: Delete User Account (Self / Admin / SuperAdmin)
+// ==========================================
+userRouter.delete('/:id', userAuth, async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const requestingUser = req.user;
+
+        const isSelf = requestingUser.id === targetUserId;
+        const isAdminOrSuper = ['Admin', 'SuperAdmin'].includes(requestingUser.role);
+
+        if (!isSelf && !isAdminOrSuper) {
+            return res.status(403).json({ message: "Not authorized to delete this account." });
+        }
+
+        const deletedUser = await User.findByIdAndDelete(targetUserId);
+        if (!deletedUser) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        res.status(200).json({ success: true, message: "Account permanently deleted." });
+    } catch (error) {
+        console.error("Delete user error:", error);
+        res.status(500).json({ message: "Server error deleting account." });
+    }
+});
+
+// ==========================================
+// ROUTE: Toggle Ban Status (Admin / SuperAdmin Only)
+// ==========================================
+userRouter.patch('/:id/ban', userAuth, async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const requestingUser = req.user;
+        const { status } = req.body; // Expects 'active' or 'banned'
+
+        if (!['Admin', 'SuperAdmin'].includes(requestingUser.role)) {
+            return res.status(403).json({ message: "Only administrators can modify ban status." });
+        }
+
+        if (requestingUser.id === targetUserId) {
+            return res.status(400).json({ message: "You cannot ban your own admin account." });
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            targetUserId,
+            { $set: { status: status } },
+            { new: true, runValidators: true }
+        ).select('-password -refreshTokens');
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `User is now ${status}`,
+            user: updatedUser
+        });
+    } catch (error) {
+        console.error("Ban user error:", error);
+        res.status(500).json({ message: "Server error updating ban status." });
+    }
+});
+
+// ==========================================
+// ROUTE: Get User Profile (For Modal Sync)
+// ==========================================
+userRouter.get('/:id', userAuth, async (req, res) => {
+    try {
+        const targetUserId = req.params.id;
+        const requestingUser = req.user;
+
+        const isSelf = requestingUser.id === targetUserId;
+        const isAdminOrSuper = ['Admin', 'SuperAdmin'].includes(requestingUser.role);
+        if (!isSelf && !isAdminOrSuper) {
+            return res.status(403).json({ message: "Not authorized to view this profile." });
+        }
+
+        const user = await User.findById(targetUserId).select('-password -refreshTokens');
+        if (!user) return res.status(404).json({ message: "User not found." });
+
+        const lastSeen = user.lastSeenAt || user.updatedAt;
+
+        res.status(200).json({ user: { ...user.toObject(), lastSeen } });
+    } catch (error) {
+        console.error("Fetch user error:", error);
+        res.status(500).json({ message: "Server error fetching user profile." });
     }
 });
 

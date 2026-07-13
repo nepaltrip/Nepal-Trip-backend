@@ -46,6 +46,38 @@ const userSchema = new mongoose.Schema({
         lastViewedAt: { type: Date, default: Date.now }
     }],
 
+    crmActivity: [{
+        packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package' },
+        packageName: String,
+        category: String,
+
+        // Exact Time Buckets (in seconds)
+        timeSpentOutside: { type: Number, default: 0 },
+        timeSpentGold: { type: Number, default: 0 },
+        timeSpentPlatinum: { type: Number, default: 0 },
+
+        totalClicks: { type: Number, default: 0 },
+        lastActiveAt: { type: Date, default: Date.now },
+
+        // Rolling 7-Day History Log
+        recentLogs: [{
+            timestamp: { type: Date, default: Date.now },
+            durationAdded: Number,
+            actionType: String,
+            tier: { type: String, enum: ['Gold', 'Platinum', 'None'], default: 'None' } // Explicit tier for aggregations
+        }]
+    }],
+    status: {
+        type: String,
+        enum: ['active', 'banned'],
+        default: 'active'
+    },
+    lastSeenAt: { type: Date, default: null },
+    isOnline: { type: Boolean, default: false },
+    topVibe: { type: String, default: "None" },
+    mostViewedPackageName: { type: String, default: "None" },
+    totalPackageVisits: { type: Number, default: 0 },
+
     // --- EXISTING FIELDS ---
     location: {
         type: { type: String, enum: ['Point'], default: 'Point' },

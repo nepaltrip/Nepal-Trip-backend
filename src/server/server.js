@@ -19,6 +19,7 @@ const { keepServerAwake } = require('../jobs/keepAwake');
 const superAdminRouter = require('../routes/superAdminRouter');
 const { trackTraffic } = require('../middleware/trafficMiddleware');
 const discoverRouter = require('../routes/discoverRouter');
+const User = require('../models/User');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -52,29 +53,66 @@ app.use(cookieParser());
 const onlineUsers = new Map();
 
 io.on('connection', (socket) => {
-    socket.on('register', (userData) => {
-        if (userData && userData.id) {
-            const userId = userData.id.toString();
+    socket.on('register', async (userData) => {
+        if (userData && (userData.id || userData._id)) {
+            const userId = (userData.id || userData._id).toString();
+            socket.userId = userId; // Attach to socket for the disconnect event
 
-            // 1. Keep tracking them in the map for quick online/offline checks
-            onlineUsers.set(userId, socket.id);
-
-            // 2. ✨ THE FIX: The user joins a personal room using their exact DB ID
-            // This ensures if they have 3 tabs open, all 3 tabs join this room.
+            // 1. Join personal room & admin room
             socket.join(userId);
-
-            // 3. Group Admins together for mass-broadcasting
-            if (userData.role === 'Admin' || userData.role === 'SuperAdmin') {
+            if (['Admin', 'SuperAdmin'].includes(userData.role)) {
                 socket.join('admin_room');
+            }
+
+            // 2. Multi-tab Tracking
+            if (!onlineUsers.has(userId)) {
+                onlineUsers.set(userId, new Set());
+            }
+            const userSockets = onlineUsers.get(userId);
+            userSockets.add(socket.id);
+
+            // 3. ✨ True Online Trigger: Only fire if this is their FIRST active tab
+            if (userSockets.size === 1) {
+                try {
+                    await User.findByIdAndUpdate(userId, { isOnline: true });
+                    io.to('admin_room').emit('user_presence_update', {
+                        userId: userId,
+                        isOnline: true,
+                        lastSeenAt: new Date()
+                    });
+                } catch (error) {
+                    console.error("Failed to set user online:", error);
+                }
             }
         }
     });
 
-    socket.on('disconnect', () => {
-        for (let [key, value] of onlineUsers.entries()) {
-            if (value === socket.id) {
-                onlineUsers.delete(key);
-                break;
+    socket.on('disconnect', async () => {
+        const userId = socket.userId;
+
+        if (userId && onlineUsers.has(userId)) {
+            const userSockets = onlineUsers.get(userId);
+            userSockets.delete(socket.id); // Remove this specific tab
+
+            // ✨ True Offline Trigger: Only fire if ALL tabs are closed
+            if (userSockets.size === 0) {
+                onlineUsers.delete(userId);
+                const exactExitTime = new Date();
+
+                try {
+                    await User.findByIdAndUpdate(userId, {
+                        isOnline: false,
+                        lastSeenAt: exactExitTime
+                    });
+
+                    io.to('admin_room').emit('user_presence_update', {
+                        userId: userId,
+                        isOnline: false,
+                        lastSeenAt: exactExitTime
+                    });
+                } catch (error) {
+                    console.error("Failed to set user offline:", error);
+                }
             }
         }
     });
