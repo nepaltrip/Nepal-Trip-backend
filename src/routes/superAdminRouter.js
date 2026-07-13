@@ -171,4 +171,43 @@ superAdminRouter.get('/package-analytics', userAuth, superAdminAuth, async (req,
     }
 });
 
+
+// ==========================================
+// GET: ALL USERS LIST (REAL-TIME DASHBOARD)
+// ==========================================
+superAdminRouter.get('/users', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        // Fetch all users, prioritizing online users and recent activity
+        const users = await User.find({})
+            .select('-password -refreshTokens')
+            .sort({ isOnline: -1, lastSeenAt: -1, createdAt: -1 })
+            .lean();
+
+        const formattedUsers = users.map(u => ({
+            id: u._id,
+            name: u.name || 'Unknown',
+            email: u.email || 'N/A',
+            phone: u.mobile || 'N/A',
+            location: u.district && u.state ? `${u.district}, ${u.state}` : (u.location?.coordinates ? 'Has Coordinates' : 'Unknown'),
+            status: u.status || 'active',
+            isOnline: u.isOnline || false,
+            lastSeenAt: u.lastSeenAt || u.updatedAt,
+            role: u.role,
+            profilePic: u.profilePic,
+            mostViewed: u.mostViewedPackageName || 'None',
+            topVibe: u.topVibe || 'None',
+            // Basic logic: If they have CRM activity > 30s, mark as Hot, else Warm/Cold
+            leadScore: (u.crmActivity && u.crmActivity.length > 0) ? 'Hot' : 'Warm',
+            joinDate: u.createdAt,
+            // Calculate if active in the last 24 hours
+            active24h: u.isOnline || (u.lastSeenAt && (new Date() - new Date(u.lastSeenAt)) < 24 * 60 * 60 * 1000)
+        }));
+
+        res.status(200).json({ success: true, users: formattedUsers });
+    } catch (error) {
+        console.error("Failed to fetch users:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch users" });
+    }
+});
+
 module.exports = superAdminRouter;
