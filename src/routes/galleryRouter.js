@@ -52,9 +52,16 @@ galleryRouter.get('/', async (req, res) => {
 
         // 2. Build the MongoDB query
         const query = { isActive: true };
+
+        // --- UPDATED SEARCH LOGIC ---
         if (search) {
-            query.locationTag = { $regex: search, $options: 'i' }; // Case-insensitive search
+            query.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { locationTag: { $regex: search, $options: 'i' } }
+            ];
         }
+        // ----------------------------
 
         // 3. Build the sort configuration
         const sortConfig = {};
