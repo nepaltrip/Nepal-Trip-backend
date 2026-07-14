@@ -45,15 +45,17 @@ packageRouter.post('/', userAuth, superAdminAuth, async (req, res) => {
             title: "New Custom Journey",
             slug: uniqueSlug,
             category: "Nature",
-            serviceTier: "All",
+            // ✨ CHANGED: Now defaults to "Gold" instead of "All"
+            serviceTier: "Gold",
             destination: "Set Destination",
             duration_days: 3,
             duration_nights: 2,
-            price_inr: 25000,
+            price_gold: 25000,
+            price_platinum: 45000,
             cover_image_mobile: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=800&auto=format&fit=crop",
             cover_image_desktop: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=1600&auto=format&fit=crop",
             short_description: "Short highlight description of the trip goes here.",
-            isActive: true // Visible instantly for editing
+            isActive: true
         };
 
         const newPackage = await Package.create(defaultPkg);
