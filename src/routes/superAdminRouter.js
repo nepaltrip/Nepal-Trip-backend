@@ -9,6 +9,8 @@ const { sendWebPush } = require('../services/pushService');
 const Notification = require('../models/Notification');
 const notificationService = require('../services/notificationService');
 const Broadcast = require('../models/Broadcast');
+const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const assetsS3Client = require('../config/cloudflareAssetsS3');
 
 // ==========================================
 // GET: DASHBOARD METRICS COUNTERS
@@ -381,22 +383,50 @@ superAdminRouter.put('/profile', userAuth, superAdminAuth, async (req, res) => {
         const { name, email, profilePic } = req.body;
         const adminId = req.user.id;
 
-        // Build the update payload
-        const updateFields = {};
-        if (name) updateFields.name = name.trim();
-        if (email) updateFields.email = email.trim().toLowerCase();
-        if (profilePic !== undefined) updateFields.profilePic = profilePic; // Accept new profile photo
+        // 1. Fetch the admin FIRST so we know what their old profile picture was
+        const targetAdmin = await User.findById(adminId);
 
-        // Update the SuperAdmin document
-        const updatedAdmin = await User.findByIdAndUpdate(
-            adminId,
-            { $set: updateFields },
-            { new: true, runValidators: true }
-        ).select('-password -refreshTokens');
-
-        if (!updatedAdmin) {
+        if (!targetAdmin) {
             return res.status(404).json({ success: false, message: "SuperAdmin account not found." });
         }
+
+        const oldProfilePic = targetAdmin.profilePic;
+
+        // 2. Apply text updates
+        if (name) targetAdmin.name = name.trim();
+        if (email) targetAdmin.email = email.trim().toLowerCase();
+
+        // 3. Handle Profile Pic & R2 Cleanup
+        if (profilePic !== undefined && profilePic !== oldProfilePic) {
+            targetAdmin.profilePic = profilePic; // Update to new picture or empty string
+
+            // If they had an old picture, delete it from the R2 bucket
+            if (oldProfilePic) {
+                try {
+                    const publicUrlBase = process.env.R2_ASSETS_PUBLIC_URL || "";
+                    let fileKey = oldProfilePic;
+
+                    if (publicUrlBase && oldProfilePic.startsWith(publicUrlBase)) {
+                        fileKey = oldProfilePic.replace(`${publicUrlBase}/`, '');
+                    } else {
+                        const urlObj = new URL(oldProfilePic);
+                        fileKey = urlObj.pathname.substring(1);
+                    }
+
+                    await assetsS3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.R2_ASSETS_BUCKET_NAME || "assets",
+                        Key: decodeURIComponent(fileKey)
+                    }));
+
+                    console.log(`Cleaned up orphaned SuperAdmin profile pic: ${fileKey}`);
+                } catch (r2Error) {
+                    console.error("Failed to delete old profile pic from R2:", r2Error);
+                }
+            }
+        }
+
+        // 4. Save the updated document
+        const updatedAdmin = await targetAdmin.save();
 
         res.status(200).json({
             success: true,
@@ -411,7 +441,6 @@ superAdminRouter.put('/profile', userAuth, superAdminAuth, async (req, res) => {
         });
 
     } catch (error) {
-        // ... rest of your existing error handling ...
         console.error("SuperAdmin Profile Update Error:", error);
         if (error.code === 11000) {
             return res.status(400).json({ success: false, message: "Email already taken." });
