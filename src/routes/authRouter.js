@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios'); // ✨ FIXED: Standard Node.js CommonJS import
+const axios = require('axios');
 const User = require('../models/User');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/token');
 const getCookieOptions = require('../config/cookieConfig');
@@ -51,7 +51,9 @@ authRouter.post('/signup', async (req, res) => {
                 id: newUser._id,
                 name: newUser.name,
                 email: newUser.email,
-                role: newUser.role
+                mobile: newUser.mobile, // ✨ ADDED MOBILE
+                role: newUser.role,
+                profilePic: newUser.profilePic || null
             }
         });
     } catch (error) {
@@ -78,7 +80,6 @@ authRouter.post('/login', async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid User credentials' });
         }
 
-        // ✨ NEW: Check if the user is banned before checking the password
         if (user.status === 'banned') {
             return res.status(403).json({ success: false, message: 'Your account has been banned !!!' });
         }
@@ -104,6 +105,7 @@ authRouter.post('/login', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
+                mobile: user.mobile || null, // ✨ ADDED MOBILE
                 role: user.role,
                 profilePic: user.profilePic || null
             }
@@ -130,9 +132,7 @@ authRouter.post('/refresh-token', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Invalid or expired refresh token' });
         }
 
-        // ✨ NEW: Boot the user out if they were banned while logged in
         if (user.status === 'banned') {
-            // Optional: You could also wipe their refresh tokens here to force a hard logout
             user.refreshTokens = [];
             await user.save();
             res.clearCookie('refreshToken', getCookieOptions());
@@ -155,6 +155,7 @@ authRouter.post('/refresh-token', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
+                mobile: user.mobile || null, // ✨ ADDED MOBILE
                 role: user.role,
                 profilePic: user.profilePic || null
             }
@@ -204,7 +205,6 @@ authRouter.post('/google', async (req, res) => {
         let user = await User.findOne({ email: email.toLowerCase() });
 
         if (user) {
-            // ✨ NEW: Check if the user is banned before letting them in via Google
             if (user.status === 'banned') {
                 return res.status(403).json({ success: false, message: 'Your account has been banned !!!' });
             }
@@ -242,12 +242,12 @@ authRouter.post('/google', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
+                mobile: user.mobile || null, // ✨ ADDED MOBILE
                 role: user.role,
-                profilePic: user.profilePic
+                profilePic: user.profilePic || null
             }
         });
     } catch (error) {
-        // ✨ FIXED: Improved Error Logging to catch DB/Schema issues
         console.error('--- GOOGLE AUTH ROUTE ERROR ---');
         console.error(error);
 

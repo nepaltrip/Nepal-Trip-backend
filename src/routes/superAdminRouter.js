@@ -385,7 +385,7 @@ superAdminRouter.put('/profile', userAuth, superAdminAuth, async (req, res) => {
         const updateFields = {};
         if (name) updateFields.name = name.trim();
         if (email) updateFields.email = email.trim().toLowerCase();
-        if (profilePic) updateFields.profilePic = profilePic; // Accept new profile photo
+        if (profilePic !== undefined) updateFields.profilePic = profilePic; // Accept new profile photo
 
         // Update the SuperAdmin document
         const updatedAdmin = await User.findByIdAndUpdate(

@@ -4,6 +4,8 @@ const Fuse = require('fuse.js');
 const { State, City } = require('country-state-city');
 const User = require('../models/User');
 const { userAuth, superAdminAuth, adminAuth } = require('../middleware/authMiddleware');
+const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const assetsS3Client = require('../config/cloudflareAssetsS3');
 
 // ==========================================
 // IMPROVED HELPER: Case-Insensitive Fuzzy Match
@@ -131,52 +133,90 @@ userRouter.post('/push-subscribe', userAuth, async (req, res) => {
 });
 
 // ==========================================
-// ROUTE: Update User Profile (User/Admin/SuperAdmin)
+// ROUTE: Update User Profile (Highly Secure & R2 Optimized)
 // ==========================================
-userRouter.put('/:id', userAuth, adminAuth, superAdminAuth, async (req, res) => {
+userRouter.put('/:id', userAuth, async (req, res) => {
     try {
         const targetUserId = req.params.id;
         const requestingUser = req.user;
 
-        // 1. Permission Check
         const isSelf = requestingUser.id === targetUserId;
         const isAdmin = requestingUser.role === 'Admin';
         const isSuperAdmin = requestingUser.role === 'SuperAdmin';
 
+        // 1. STRICT BASE CHECK
         if (!isSelf && !isAdmin && !isSuperAdmin) {
-            return res.status(403).json({ message: "Not authorized to edit this profile" });
+            return res.status(403).json({ message: "Unauthorized: You can only modify your own profile." });
         }
 
-        // 2. Prepare Update Data
-        const { name, email, phone, role } = req.body;
-        let updateFields = {};
-
-        if (name) updateFields.name = name;
-        if (email) updateFields.email = email;
-
-        // Map frontend 'phone' to DB 'mobile'
-        if (phone !== undefined) updateFields.mobile = phone;
-
-        // 3. Strict Role Modification Protection
-        // Only SuperAdmins are allowed to elevate or downgrade user roles
-        if (role && role !== 'User' && !isSuperAdmin) {
-            return res.status(403).json({ message: "Only SuperAdmins can modify access roles." });
-        } else if (role && isSuperAdmin) {
-            updateFields.role = role;
+        // 2. FETCH TARGET USER 
+        const targetUser = await User.findById(targetUserId);
+        if (!targetUser) {
+            return res.status(404).json({ message: "User not found." });
         }
 
-        // 4. Update the Database
-        const updatedUser = await User.findByIdAndUpdate(
-            targetUserId,
-            { $set: updateFields },
-            { new: true, runValidators: true }
-        ).select('-password -refreshTokens');
-
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found" });
+        // 3. HIERARCHY PROTECTION
+        if (!isSelf && isAdmin) {
+            if (targetUser.role === 'SuperAdmin' || targetUser.role === 'Admin') {
+                return res.status(403).json({ message: "Unauthorized: Admins cannot modify other administrative accounts." });
+            }
         }
 
-        // 5. Send back formatted data matching frontend expectations
+        // 4. PREPARE DATA
+        const { name, email, phone, role, profilePic, password } = req.body;
+        const oldProfilePic = targetUser.profilePic; // Save the old URL before we overwrite it
+
+        if (name) targetUser.name = name;
+        if (email) targetUser.email = email;
+        if (phone !== undefined) targetUser.mobile = phone;
+        if (password) targetUser.password = password;
+
+        // 5. HANDLE PROFILE PICTURE & R2 CLEANUP
+        if (profilePic !== undefined && profilePic !== oldProfilePic) {
+            targetUser.profilePic = profilePic; // Update to new picture (or empty string)
+
+            // If they had an old picture, delete it from the R2 bucket
+            if (oldProfilePic) {
+                try {
+                    // Extract the Object Key from the public URL
+                    const publicUrlBase = process.env.R2_ASSETS_PUBLIC_URL || "";
+                    let fileKey = oldProfilePic;
+
+                    if (publicUrlBase && oldProfilePic.startsWith(publicUrlBase)) {
+                        fileKey = oldProfilePic.replace(`${publicUrlBase}/`, '');
+                    } else {
+                        // Fallback extraction just in case
+                        const urlObj = new URL(oldProfilePic);
+                        fileKey = urlObj.pathname.substring(1);
+                    }
+
+                    // Send the delete command to Cloudflare R2
+                    await assetsS3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.R2_ASSETS_BUCKET_NAME || "assets",
+                        Key: decodeURIComponent(fileKey)
+                    }));
+
+                    console.log(`Cleaned up orphaned profile pic: ${fileKey}`);
+                } catch (r2Error) {
+                    // We catch this error without crashing the server. 
+                    // If R2 deletion fails, we still want the DB update to succeed!
+                    console.error("Failed to delete old profile pic from R2:", r2Error);
+                }
+            }
+        }
+
+        // 6. STRICT ROLE MODIFICATION
+        if (role && role !== targetUser.role) {
+            if (!isSuperAdmin) {
+                return res.status(403).json({ message: "Unauthorized: Only SuperAdmins can change user roles." });
+            }
+            targetUser.role = role;
+        }
+
+        // 7. EXECUTE THE UPDATE
+        const updatedUser = await targetUser.save();
+
+        // 8. RETURN FORMATTED DATA
         res.status(200).json({
             message: "Profile updated successfully",
             user: {
@@ -185,22 +225,23 @@ userRouter.put('/:id', userAuth, adminAuth, superAdminAuth, async (req, res) => 
                 email: updatedUser.email,
                 phone: updatedUser.mobile,
                 role: updatedUser.role,
+                profilePic: updatedUser.profilePic,
                 location: updatedUser.district ? `${updatedUser.district}, ${updatedUser.state}` : '',
             }
         });
 
     } catch (error) {
         console.error("Profile update error:", error);
-
-        // Catch MongoDB Unique Constraint Errors (e.g., email or phone already in use)
         if (error.code === 11000) {
             return res.status(400).json({ message: "Email or phone number is already in use by another account." });
         }
-
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join(', ') });
+        }
         res.status(500).json({ message: "Server error updating profile" });
     }
 });
-
 
 // ==========================================
 // ROUTE: Delete User Account (Self / Admin / SuperAdmin)
