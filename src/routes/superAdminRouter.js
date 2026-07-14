@@ -373,4 +373,106 @@ superAdminRouter.get('/broadcast-history', userAuth, superAdminAuth, async (req,
     }
 });
 
+// ==========================================
+// ROUTE: Update SuperAdmin Profile
+// ==========================================
+superAdminRouter.put('/profile', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        const { name, email, profilePic } = req.body;
+        const adminId = req.user.id;
+
+        // Build the update payload
+        const updateFields = {};
+        if (name) updateFields.name = name.trim();
+        if (email) updateFields.email = email.trim().toLowerCase();
+        if (profilePic) updateFields.profilePic = profilePic; // Accept new profile photo
+
+        // Update the SuperAdmin document
+        const updatedAdmin = await User.findByIdAndUpdate(
+            adminId,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        ).select('-password -refreshTokens');
+
+        if (!updatedAdmin) {
+            return res.status(404).json({ success: false, message: "SuperAdmin account not found." });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully.",
+            user: {
+                id: updatedAdmin._id,
+                name: updatedAdmin.name,
+                email: updatedAdmin.email,
+                role: updatedAdmin.role,
+                profilePic: updatedAdmin.profilePic
+            }
+        });
+
+    } catch (error) {
+        // ... rest of your existing error handling ...
+        console.error("SuperAdmin Profile Update Error:", error);
+        if (error.code === 11000) {
+            return res.status(400).json({ success: false, message: "Email already taken." });
+        }
+        res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
+// ==========================================
+// ROUTE: Update/Set SuperAdmin Password
+// ==========================================
+superAdminRouter.put('/password', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        const { newPassword, confirmPassword } = req.body;
+        const adminId = req.user.id;
+
+        // 1. Basic validation
+        if (!newPassword || !confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Both new password and confirm password fields are required."
+            });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Passwords do not match."
+            });
+        }
+
+        // 2. Fetch the admin user
+        const admin = await User.findById(adminId);
+        if (!admin) {
+            return res.status(404).json({ success: false, message: "SuperAdmin not found." });
+        }
+
+        // 3. Set the new password and save
+        // Calling .save() ensures your Mongoose pre('save') hook hashes the new password
+        admin.password = newPassword;
+        await admin.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Password updated successfully!"
+        });
+
+    } catch (error) {
+        console.error("SuperAdmin Password Update Error:", error);
+
+        // Catch Mongoose password strength validation errors
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(val => val.message);
+            return res.status(400).json({ success: false, message: messages.join(', ') });
+        }
+
+        res.status(500).json({
+            success: false,
+            message: "Internal server error while updating password."
+        });
+    }
+});
+
 module.exports = superAdminRouter;

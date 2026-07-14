@@ -91,16 +91,13 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index({ location: '2dsphere' });
 
-userSchema.pre('save', async function () { // 1. Remove 'next' parameter
-    // Skip hashing if it's a Google user or password isn't modified
-    if (!this.isModified('password') || this.authProvider === 'google') {
-        return; // 2. Just return to exit the function
+userSchema.pre('save', async function () {
+    if (!this.isModified('password')) {
+        return;
     }
 
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-
-    // 3. No need to call next() at the end! Mongoose knows it's done when the async function finishes.
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
