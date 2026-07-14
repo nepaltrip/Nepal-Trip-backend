@@ -5,6 +5,10 @@ const User = require('../models/User');
 const Traffic = require('../models/Traffic');
 const Package = require('../models/Package');
 const { userAuth, superAdminAuth } = require('../middleware/authMiddleware');
+const { sendWebPush } = require('../services/pushService');
+const Notification = require('../models/Notification');
+const notificationService = require('../services/notificationService');
+const Broadcast = require('../models/Broadcast');
 
 // ==========================================
 // GET: DASHBOARD METRICS COUNTERS
@@ -207,6 +211,165 @@ superAdminRouter.get('/users', userAuth, superAdminAuth, async (req, res) => {
     } catch (error) {
         console.error("Failed to fetch users:", error);
         res.status(500).json({ success: false, message: "Failed to fetch users" });
+    }
+});
+
+
+// ==========================================
+// GET: LIGHTWEIGHT USERS LIST (For Dropdowns)
+// ==========================================
+superAdminRouter.get('/users-list', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        // Fetch all users except the sender, returning only essential fields
+        const users = await User.find({ _id: { $ne: req.user.id } })
+            .select('name email role isOnline')
+            .sort({ name: 1 })
+            .lean();
+
+        res.status(200).json({ success: true, users });
+    } catch (error) {
+        console.error("Failed to fetch users list:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch users list" });
+    }
+});
+
+// ==========================================
+// POST: SEND GLOBAL BROADCAST
+// ==========================================
+superAdminRouter.post('/broadcast', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        const { title, message, audience, type, specificUserId, state, district } = req.body;
+
+        let query = { _id: { $ne: req.user.id } }; // Exclude the sender
+
+        // 1. Role/Audience Filter
+        // Note: If audience === 'all', we don't add a role query, which targets everyone naturally.
+        if (audience === 'users') query.role = 'User';
+        if (audience === 'admins') query.role = { $in: ['Admin', 'SuperAdmin'] };
+        if (audience === 'online') query.isOnline = true;
+
+        if (audience === 'specific' && specificUserId) {
+            query._id = specificUserId;
+        } else {
+            // 2. Location Filter (Applied ON TOP of the audience, but ignored for specific users)
+            if (state) query.state = state;
+            if (district) query.district = district;
+        }
+
+        // Fetch targets
+        const targetUsers = await User.find(query).select('_id email');
+
+        if (targetUsers.length === 0) {
+            return res.status(404).json({ message: "No users matched the selected audience and location criteria." });
+        }
+
+        const io = req.app.get('io');
+        const onlineUsersMap = req.app.get('onlineUsers');
+
+        const notificationsToInsert = [];
+        const webPushPromises = [];
+
+        // Prepare notifications
+        targetUsers.forEach(user => {
+            const userIdStr = user._id.toString();
+
+            notificationsToInsert.push({
+                recipient: user._id,
+                title: title,
+                message: message,
+                type: type || 'system',
+            });
+
+            if (onlineUsersMap && onlineUsersMap.has(userIdStr)) {
+                // User is online, socket will handle it
+            } else {
+                // User is offline, send web push
+                webPushPromises.push(
+                    sendWebPush(user._id, title, message, "/")
+                );
+            }
+        });
+
+        // Save to DB
+        const savedNotifications = await Notification.insertMany(notificationsToInsert);
+
+        // Fire Sockets
+        if (io && onlineUsersMap) {
+            savedNotifications.forEach(notification => {
+                const recipientStr = notification.recipient.toString();
+                if (onlineUsersMap.has(recipientStr)) {
+                    io.to(recipientStr).emit('new_notification', notification);
+                }
+            });
+        }
+
+        // Fire Web Pushes
+        if (webPushPromises.length > 0) {
+            Promise.allSettled(webPushPromises).catch(console.error);
+        }
+
+        // Fire Emails
+        const targetEmails = targetUsers.map(user => user.email).filter(Boolean);
+        if (targetEmails.length > 0) {
+            notificationService.sendBroadcastEmail(targetEmails, title, message).catch(console.error);
+        }
+
+        // ✨ SAVE BROADCAST HISTORY
+        const sender = await User.findById(req.user.id).select('name role');
+
+        const broadcastHistory = new Broadcast({
+            sender: sender._id,
+            senderName: sender.name,
+            senderRole: sender.role,
+            title,
+            message,
+            alertType: type || 'system',
+            targetAudience: audience,
+            specificUserId: specificUserId || null,
+            targetState: audience !== 'specific' ? (state || '') : '', // Clean up history logs
+            targetDistrict: audience !== 'specific' ? (district || '') : '',
+            recipientCount: targetUsers.length
+        });
+
+        await broadcastHistory.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Broadcast deployed",
+            recipientCount: targetUsers.length,
+            broadcastId: broadcastHistory._id
+        });
+
+    } catch (error) {
+        console.error("Broadcast failed:", error);
+        res.status(500).json({ message: "Failed to send broadcast" });
+    }
+});
+
+
+// ==========================================
+// GET: BROADCAST HISTORY
+// ==========================================
+superAdminRouter.get('/broadcast-history', userAuth, superAdminAuth, async (req, res) => {
+    try {
+        // Fetch all broadcasts, sort by newest first
+        const history = await Broadcast.find()
+            // Populate the specific user's name and email if the broadcast was targeted
+            .populate('specificUserId', 'name email role')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            count: history.length,
+            data: history
+        });
+    } catch (error) {
+        console.error("Failed to fetch broadcast history:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to load broadcast history"
+        });
     }
 });
 

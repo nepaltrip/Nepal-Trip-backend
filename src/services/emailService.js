@@ -32,7 +32,6 @@ const getMasterTemplate = (title, bodyText, actionButtonHtml = '') => {
     <body>
         <div class="container">
             <div class="header">
-                <!-- Nepal Trip Placeholder Logo -->
                 <h2 style="color: #ffffff; margin: 0; letter-spacing: 1px;">NEPAL TRIP</h2>
             </div>
             <div class="content">
@@ -52,13 +51,19 @@ const getMasterTemplate = (title, bodyText, actionButtonHtml = '') => {
     `;
 };
 
-const sendEmail = async (to, subject, htmlContent) => {
+// ✨ Added BCC support for mass broadcasting
+const sendEmail = async (to, subject, htmlContent, bcc = null) => {
     const mailOptions = {
         from: `"Nepal Trip" <${process.env.FROM_EMAIL}>`,
         to,
         subject,
         html: htmlContent
     };
+
+    if (bcc) {
+        mailOptions.bcc = bcc;
+    }
+
     return transporter.sendMail(mailOptions);
 };
 
