@@ -21,6 +21,7 @@ const { trackTraffic } = require('../middleware/trafficMiddleware');
 const discoverRouter = require('../routes/discoverRouter');
 const User = require('../models/User');
 const socialRouter = require('../routes/socialRouter');
+const adminRouter = require('../routes/adminRouter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -136,6 +137,7 @@ app.use('/api/media', mediaRouter);
 app.use('/api/inquiries', inquiryRouter);
 app.use('/api/gallery', galleryRouter);
 app.use('/api/notifications', notificationRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/superadmin', superAdminRouter);
 app.use('/api/discover', discoverRouter);
 app.use('/api/social', socialRouter);
