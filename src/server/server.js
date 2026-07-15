@@ -23,6 +23,8 @@ const User = require('../models/User');
 const socialRouter = require('../routes/socialRouter');
 const adminRouter = require('../routes/adminRouter');
 const { ServicesRouter } = require('../routes/ServicesRouter');
+const SitemapRouter = require('../routes/Sitemap');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -142,7 +144,8 @@ app.use('/api/admin', adminRouter);
 app.use('/api/superadmin', superAdminRouter);
 app.use('/api/discover', discoverRouter);
 app.use('/api/social', socialRouter);
-app.use('/api/services', ServicesRouter); // ✨ Added ServicesRouter
+app.use('/api/services', ServicesRouter);
+app.use('/api/sitemap', SitemapRouter);
 
 const startServer = async () => {
     try {
