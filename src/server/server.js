@@ -22,6 +22,7 @@ const discoverRouter = require('../routes/discoverRouter');
 const User = require('../models/User');
 const socialRouter = require('../routes/socialRouter');
 const adminRouter = require('../routes/adminRouter');
+const { ServicesRouter } = require('../routes/ServicesRouter');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -141,6 +142,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/superadmin', superAdminRouter);
 app.use('/api/discover', discoverRouter);
 app.use('/api/social', socialRouter);
+app.use('/api/services', ServicesRouter); // ✨ Added ServicesRouter
 
 const startServer = async () => {
     try {
