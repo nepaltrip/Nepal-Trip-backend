@@ -11,6 +11,14 @@ const inquirySchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package', default: null },
     hiddenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
+    // ✨ ADDED: Store the history of admin replies here
+    replies: [{
+        message: { type: String, required: true },
+        repliedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        repliedAt: { type: Date, default: Date.now }
+    }],
+
     expiresAt: {
         type: Date,
         default: Date.now

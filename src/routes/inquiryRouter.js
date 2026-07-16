@@ -112,28 +112,37 @@ inquiryRouter.post('/:id/reply', userAuth, async (req, res) => {
         if (!inquiry) return res.status(404).json({ message: "Inquiry not found." });
 
         inquiry.status = 'replied';
+
+        // ✨ NEW: Save the reply to the database
+        inquiry.replies.push({
+            message: replyMessage,
+            repliedBy: req.user.id
+        });
+
         await inquiry.save();
 
-        const updatedInquiry = await Inquiry.findById(inquiry._id).populate('userId', 'name email profilePic isOnline lastSeenAt status');
+        // Populate the user and the new reply sender data
+        const updatedInquiry = await Inquiry.findById(inquiry._id)
+            .populate('userId', 'name email profilePic isOnline lastSeenAt status')
+            .populate('replies.repliedBy', 'name role');
+
         const io = req.app.get('io');
         const onlineUsers = req.app.get('onlineUsers');
 
-        // ✨ 1. REAL-TIME DASHBOARD SYNC (Silent UI Update)
+        // 1. REAL-TIME DASHBOARD SYNC (Silent UI Update)
         if (io) {
             io.to('admin_room').emit('dashboard_counter_update', { action: 'decrement_pending' });
             io.to('admin_room').emit('inquiry_replied', updatedInquiry);
         }
 
-        // ✨ 2. EMAIL CUSTOMER (Unconditional)
+        // 2. EMAIL CUSTOMER (Unconditional)
         const customerEmail = inquiry.formData.email;
         const customerName = inquiry.formData.name || 'Traveler';
         await notificationService.sendInquiryReplyEmail(customerEmail, customerName, replyMessage);
 
-        // ✨ 3. IN-APP DOCS & PRESENCE ROUTING (Registered Users Only)
+        // ... rest of the existing notification logic remains exactly the same ...
         if (inquiry.userId) {
             const userIdStr = inquiry.userId.toString();
-
-            // Always save In-App doc
             const savedNotification = await Notification.create({
                 recipient: inquiry.userId,
                 title: "Inquiry Replied ✅",
@@ -146,12 +155,9 @@ inquiryRouter.post('/:id/reply', userAuth, async (req, res) => {
                 }
             });
 
-            // Route based on presence
             if (onlineUsers && onlineUsers.has(userIdStr)) {
-                // ONLINE: Socket Toast
                 if (io) io.to(userIdStr).emit('new_notification', savedNotification);
             } else {
-                // OFFLINE: Web Push
                 await sendWebPush(inquiry.userId, "Nepal Trip Support", "An admin has responded to your inquiry!", "/");
             }
         }
@@ -172,6 +178,7 @@ inquiryRouter.get('/', userAuth, async (req, res) => {
 
         const inquiries = await Inquiry.find({ hiddenBy: { $ne: req.user.id } })
             .populate('userId', 'name email profilePic isOnline lastSeenAt status')
+            .populate('replies.repliedBy', 'name role') // ✨ NEW: Populate admin names on load
             .sort({ createdAt: -1 });
 
         res.status(200).json(inquiries);
