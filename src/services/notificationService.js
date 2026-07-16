@@ -9,7 +9,7 @@ const NotificationService = {
                 <p>We are absolutely thrilled to welcome you to our community.</p>
                 <p>Your account has been securely activated. Get ready to explore handcrafted trekking packages, cultural local experiences, and fully customizable itineraries across Nepal.</p>
             `;
-            const actionButtonHtml = `<a href="${process.env.FRONTEND_URL}/dashboard" class="btn">Explore Dashboard</a>`;
+            const actionButtonHtml = `<a href="${process.env.FRONTEND_URL}" class="btn">Explore Dashboard</a>`;
 
             const compiledHtml = getMasterTemplate(title, bodyText, actionButtonHtml);
             await sendEmail(userEmail, "Welcome to Nepal Trip!", compiledHtml);
@@ -62,7 +62,7 @@ const NotificationService = {
                 <p>A new inquiry was submitted via the <b>${source || 'General'}</b>.</p>
                 <p>Log in to your dashboard to view the details and respond to the traveler.</p>
             `;
-            const actionButtonHtml = `<a href="${process.env.FRONTEND_URL}/admin/inquiries" class="btn">View Inquiry</a>`;
+            const actionButtonHtml = `<a href="${process.env.FRONTEND_URL}" class="btn">View Inquiry</a>`;
 
             const compiledHtml = getMasterTemplate(title, bodyText, actionButtonHtml);
             await sendEmail(adminEmailsArray.join(','), "New Lead Received - Nepal Trip", compiledHtml);

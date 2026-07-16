@@ -10,8 +10,8 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// Master Layout HTML Shell
-const getMasterTemplate = (title, bodyText, actionButtonHtml = '') => {
+// Master Layout HTML Shell (UI Improved, Logo Added, Generic '/' Link as Default)
+const getMasterTemplate = (title, bodyText, actionButtonHtml = `<a href="${process.env.FRONTEND_URL}/" class="btn">View in App</a>`) => {
     return `
     <!DOCTYPE html>
     <html>
@@ -19,20 +19,68 @@ const getMasterTemplate = (title, bodyText, actionButtonHtml = '') => {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f9f6f0; color: #333333; }
-            .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e6e0d4; }
-            .header { background-color: #1a3a3a; padding: 30px; text-align: center; }
-            .logo { max-height: 50px; }
-            .content { padding: 40px 30px; line-height: 1.6; }
-            .title { color: #e05e2b; font-size: 24px; font-weight: 700; margin-top: 0; margin-bottom: 20px; }
-            .footer { background-color: #f1ede4; text-align: center; padding: 20px; font-size: 12px; color: #777777; border-top: 1px solid #e6e0d4; }
-            .btn { display: inline-block; padding: 12px 30px; background-color: #e05e2b; color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 20px; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                padding: 0; 
+                background-color: #FDFBF7; 
+                color: #333333; 
+            }
+            .container { 
+                max-width: 600px; 
+                margin: 40px auto; 
+                background: #ffffff; 
+                border-radius: 16px; 
+                overflow: hidden; 
+                box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+                border: 1px solid #e6e0d4; 
+            }
+            .header { 
+                background-color: #2A5244; 
+                padding: 30px; 
+                text-align: center; 
+            }
+            .logo { 
+                max-height: 50px; 
+                margin-bottom: 10px;
+            }
+            .content { 
+                padding: 40px 30px; 
+                line-height: 1.6; 
+            }
+            .title { 
+                color: #FA6D16; 
+                font-size: 24px; 
+                font-weight: 700; 
+                margin-top: 0; 
+                margin-bottom: 20px; 
+            }
+            .footer { 
+                background-color: #EAE9E6; 
+                text-align: center; 
+                padding: 20px; 
+                font-size: 12px; 
+                color: #777777; 
+                border-top: 1px solid #e6e0d4; 
+            }
+            .btn { 
+                display: inline-block; 
+                padding: 14px 32px; 
+                background-color: #FA6D16; 
+                color: #ffffff !important; 
+                text-decoration: none; 
+                border-radius: 12px; 
+                font-weight: 700; 
+                margin-top: 20px; 
+                box-shadow: 0 4px 10px rgba(250, 109, 22, 0.3);
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h2 style="color: #ffffff; margin: 0; letter-spacing: 1px;">NEPAL TRIP</h2>
+                <img src="${process.env.FRONTEND_URL}/logo.svg" alt="Nepal Trip Logo" class="logo" onerror="this.style.display='none'" />
+                <h2 style="color: #ffffff; margin: 0; letter-spacing: 2px; font-weight: 600;">NEPAL TRIP</h2>
             </div>
             <div class="content">
                 <h1 class="title">${title}</h1>
@@ -42,8 +90,8 @@ const getMasterTemplate = (title, bodyText, actionButtonHtml = '') => {
                 ${actionButtonHtml}
             </div>
             <div class="footer">
-                &copy; 2026 Nepal Trip. All rights reserved.<br>
-                Explore the Himalayas with absolute ease.
+                &copy; ${new Date().getFullYear()} Nepal Trip. All rights reserved.<br>
+                CURATED JOURNEYS, UNFORGETTABLE MEMORIES
             </div>
         </div>
     </body>
